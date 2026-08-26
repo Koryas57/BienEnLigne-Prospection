@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:jwt-retry": "node --experimental-strip-types --test tests/jwt-clock-skew.test.mjs",
-    "test:e2e:fresh-login": "node --env-file=.env.local scripts/e2e-fresh-login.mjs"
+    "test:mobile-nav": "node --test tests/mobile-navigation.test.mjs",
+    "test:e2e:fresh-login": "node --env-file=.env.local scripts/e2e-fresh-login.mjs",
+    "test:e2e:mobile-nav": "node --env-file=.env.local scripts/e2e-mobile-navigation.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "latest",
