@@ -10,8 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test:jwt-retry": "node --experimental-strip-types --test tests/jwt-clock-skew.test.mjs",
     "test:mobile-nav": "node --test tests/mobile-navigation.test.mjs",
+    "test:openai": "node --experimental-strip-types --test tests/openai-integration.test.mjs",
     "test:e2e:fresh-login": "node --env-file=.env.local scripts/e2e-fresh-login.mjs",
-    "test:e2e:mobile-nav": "node --env-file=.env.local scripts/e2e-mobile-navigation.mjs"
+    "test:e2e:mobile-nav": "node --env-file=.env.local scripts/e2e-mobile-navigation.mjs",
+    "test:e2e:openai": "node --env-file=.env.local scripts/e2e-openai-status.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "latest",

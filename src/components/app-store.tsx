@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { initialState } from "@/lib/demo-data";
+import { requestAI } from "@/lib/ai/client";
+import { resolveAIRequest } from "@/lib/ai/contracts";
 import { scoreProspect } from "@/lib/scoring";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -21,7 +23,7 @@ interface StoreValue {
   updateCampaign: (id: string, updates: Partial<Campaign>) => Promise<void>;
   addProspect: (prospect: Omit<Prospect, "id" | "createdAt" | "updatedAt">) => Promise<string | undefined>;
   updateProspect: (id: string, updates: Partial<Prospect>) => Promise<void>;
-  analyzeProspect: (id: string) => Promise<void>;
+  analyzeProspect: (id: string) => Promise<boolean | undefined>;
   generateMessage: (prospectId: string, channel: Channel, kind?: OutreachMessage["kind"]) => Promise<string | undefined>;
   updateMessage: (id: string, body: string, subject?: string) => Promise<void>;
   setMessageStatus: (ids: string[], status: "APPROVED" | "REJECTED" | "SNOOZED") => Promise<void>;
@@ -120,31 +122,34 @@ export function AppStoreProvider({ children, initialData, mode, userId }: { chil
     setState((current) => ({ ...current, prospects: current.prospects.map((prospect) => prospect.id === id ? { ...prospect, ...updates, updatedAt: new Date().toISOString() } : prospect), activities: [localActivity(id, "UPDATED", "Fiche prospect modifiée"), ...current.activities] }));
   }); }, [refresh, run, supabase]);
 
-  const analyzeProspect = useCallback(async (id: string) => { await run(async () => {
+  const analyzeProspect = useCallback((id: string) => run(async () => {
     const prospect = state.prospects.find((item) => item.id === id);
     if (!prospect || prospect.status === "DO_NOT_CONTACT") throw new Error("Ce prospect ne peut pas être analysé.");
-    const fallback = fallbackAnalysis(prospect); let result = fallback;
-    try {
-      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: "analyzeProspect", prospect }) });
-      if (response.ok) { const payload = await response.json() as { data: ProspectAnalysis }; result = { ...fallback, analysis: { ...payload.data, demo: false }, reason: payload.data.reasonToContact }; }
-    } catch { /* Le fallback reste explicitement marqué démo. */ }
-    if (supabase) { await saveAnalysis(supabase, prospect, result.analysis, result.score, result.reason); await refresh(); return; }
-    const now = new Date().toISOString(); setState((current) => ({ ...current, prospects: current.prospects.map((item) => item.id === id ? { ...item, leadScore: result.score, qualificationReason: result.reason, status: result.score >= 55 ? "QUALIFIED" : "ANALYZED", analysis: result.analysis, updatedAt: now } : item), activities: [localActivity(id, "ANALYZED", `Analyse terminée, score ${result.score}/100 (Demo AI result)`), ...current.activities] }));
-  }); }, [refresh, run, state.prospects, supabase]);
+    const fallback = fallbackAnalysis(prospect);
+    const resolved = await resolveAIRequest(mode, async () => {
+      const analysis = await requestAI<ProspectAnalysis>({ task: "analyzeProspect", prospect });
+      return { ...fallback, analysis: { ...analysis, demo: false }, reason: analysis.reasonToContact };
+    }, () => fallback);
+    const result = resolved.data;
+    if (supabase) { await saveAnalysis(supabase, prospect, result.analysis, result.score, result.reason); await refresh(); return true; }
+    const demoSuffix = resolved.demo ? " (Demo AI result)" : "";
+    const now = new Date().toISOString(); setState((current) => ({ ...current, prospects: current.prospects.map((item) => item.id === id ? { ...item, leadScore: result.score, qualificationReason: result.reason, status: result.score >= 55 ? "QUALIFIED" : "ANALYZED", analysis: result.analysis, updatedAt: now } : item), activities: [localActivity(id, "ANALYZED", `Analyse terminée, score ${result.score}/100${demoSuffix}`), ...current.activities] }));
+    return true;
+  }), [mode, refresh, run, state.prospects, supabase]);
 
   const generateMessage = useCallback(async (prospectId: string, channel: Channel, kind: OutreachMessage["kind"] = "FIRST_CONTACT") => run(async () => {
     const prospect = state.prospects.find((item) => item.id === prospectId); const campaign = state.campaigns.find((item) => item.id === prospect?.campaignId);
     if (!prospect || prospect.status === "DO_NOT_CONTACT") throw new Error("Génération bloquée pour ce prospect.");
-    let generated = fallbackMessage(prospect, campaign, channel, kind); let isDemo = true;
-    try {
-      const response = await fetch("/api/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task: "generateOutreachMessage", prospect, campaign: campaign ?? {}, channel, kind }) });
-      if (response.ok) { const payload = await response.json() as { data: { subject?: string; body: string } }; generated = { subject: payload.data.subject, body: sanitizeCommercialMessage(payload.data.body) }; isDemo = false; }
-    } catch { /* Le fallback reste explicitement marqué démo. */ }
+    const resolved = await resolveAIRequest(mode, async () => {
+      const generated = await requestAI<{ subject?: string; body: string }>({ task: "generateOutreachMessage", prospect, campaign: campaign ?? {}, channel, kind });
+      return { subject: generated.subject, body: sanitizeCommercialMessage(generated.body) };
+    }, () => fallbackMessage(prospect, campaign, channel, kind));
+    const generated = resolved.data; const isDemo = resolved.demo;
     const now = new Date().toISOString();
     const draft = { prospectId, campaignId: prospect.campaignId, channel, kind, ...generated, status: "DRAFT" as const, scheduledFor: now, recommendedLocalTime: "9:00 AM - 11:00 AM local time" };
     if (supabase) { const id = await createMessageRow(supabase, draft, isDemo); await refresh(); return id; }
     const id = uid("message"); setState((current) => ({ ...current, prospects: current.prospects.map((item) => item.id === prospectId ? { ...item, status: "DRAFT_READY", updatedAt: now } : item), messages: [{ ...draft, id, createdAt: now, updatedAt: now }, ...current.messages], activities: [localActivity(prospectId, "MESSAGE_GENERATED", `Brouillon ${channel} créé (Demo AI result)`), ...current.activities] })); return id;
-  }), [refresh, run, state.campaigns, state.prospects, supabase]);
+  }), [mode, refresh, run, state.campaigns, state.prospects, supabase]);
 
   const updateMessage = useCallback(async (id: string, body: string, subject?: string) => { await run(async () => {
     if (supabase) { await updateMessageRow(supabase, id, body, subject); await refresh(); return; }
