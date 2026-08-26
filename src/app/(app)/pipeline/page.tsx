@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAppStore } from "@/components/app-store";
 import { Badge, PageHeader, Stat } from "@/components/ui";
 import type { Prospect, ProspectStatus } from "@/lib/types";
+import { prospectStatusLabel } from "@/lib/status-labels";
 
 const columns: Array<{ title: string; statuses: ProspectStatus[] }> = [
   { title: "À contacter", statuses: ["NEW", "ANALYZED", "QUALIFIED", "DRAFT_READY", "APPROVED"] },
@@ -22,7 +23,7 @@ export default function PipelinePage() {
     <div className="stats-grid"><Stat label="Opportunités actives" value={state.prospects.filter((p) => !["WON","LOST","DO_NOT_CONTACT"].includes(p.status)).length} /><Stat label="CA potentiel" value={`$${potential}`} tone="amber" /><Stat label="Ventes" value={state.deals.length} /><Stat label="CA gagné" value={`$${won}`} tone="green" /></div>
     <div className="pipeline-grid section">{columns.map((column) => {
       const prospects = state.prospects.filter((prospect) => column.statuses.includes(prospect.status));
-      return <section className="pipeline-column" key={column.title}><div className="pipeline-header"><h2>{column.title}</h2><Badge>{prospects.length}</Badge></div>{prospects.map((prospect: Prospect) => <Link className="pipeline-card" href={`/prospects/${prospect.id}`} key={prospect.id}><div className="list-card-top"><div><h3>{prospect.businessName}</h3><p className="small muted">{prospect.category} · {prospect.city}</p></div><strong>{prospect.leadScore}</strong></div><div className="list-card-meta"><Badge tone={prospect.status === "WON" ? "green" : prospect.status === "LOST" ? "red" : "neutral"}>{prospect.status}</Badge><span className="small muted">${state.campaigns.find((c) => c.id === prospect.campaignId)?.price ?? 0}</span></div></Link>)}</section>;
+      return <section className="pipeline-column" key={column.title}><div className="pipeline-header"><h2>{column.title}</h2><Badge>{prospects.length}</Badge></div>{prospects.map((prospect: Prospect) => <Link className="pipeline-card" href={`/prospects/${prospect.id}`} key={prospect.id}><div className="list-card-top"><div><h3>{prospect.businessName}</h3><p className="small muted">{prospect.category} · {prospect.city}</p></div><strong>{prospect.leadScore}</strong></div><div className="list-card-meta"><Badge tone={prospect.status === "WON" ? "green" : prospect.status === "LOST" ? "red" : "neutral"}>{prospectStatusLabel(prospect.status)}</Badge><span className="small muted">${state.campaigns.find((c) => c.id === prospect.campaignId)?.price ?? 0}</span></div></Link>)}</section>;
     })}</div>
   </>;
 }

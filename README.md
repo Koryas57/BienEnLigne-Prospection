@@ -15,15 +15,15 @@ V1 mobile-first d’un cockpit interne de prospection. Elle permet de créer des
 
 ## Fonctionnement actuel
 
-Le projet démarre immédiatement sans service externe :
+Le fournisseur de données est choisi explicitement au démarrage :
 
-- le **mode local** persiste les données dans `localStorage` et fournit des seeds clairement marqués démo ;
-- si Supabase est configuré, les routes applicatives sont protégées par Supabase Auth ;
-- la migration PostgreSQL et ses politiques RLS sont prêtes pour le stockage partagé ;
+- si les variables Supabase sont présentes, Supabase Auth protège toutes les routes privées et toutes les données métier proviennent de PostgreSQL sous RLS ;
+- dans ce mode, aucune donnée de démonstration et aucun état `localStorage` ne sont lus ;
+- le **mode local** avec seeds clairement marqués démo n’est utilisé que lorsque Supabase n’est pas configuré ;
 - si `OPENAI_API_KEY` est présente, l’analyse et la génération appellent `/api/ai`, puis remplacent le fallback local par une sortie OpenAI validée ;
 - sans clé OpenAI, l’interface continue avec un résultat marqué `Demo AI result`.
 
-Le mode local est intentionnellement utilisable seul. Pour une utilisation multi-appareils, ajoutez un repository Supabase aux mêmes opérations exposées par `AppStoreProvider`.
+Les lectures et mutations Supabase sont centralisées dans `src/lib/data/supabase-repository.ts`. Elles utilisent la session de l’utilisateur et ne transmettent jamais d’`owner_id` depuis le navigateur.
 
 ## Installation
 
@@ -86,11 +86,12 @@ src/
     api/ai/                appels IA exclusivement serveur
     auth/                  connexion et déconnexion Supabase
   components/
-    app-store.tsx          modèle métier local et transitions auditées
+    app-store.tsx          orchestration explicite Supabase/démo
     app-shell.tsx          navigation desktop/mobile
   lib/
     ai/                    prompts, schémas Zod et client OpenAI
-    supabase/              clients SSR/browser
+    data/                  repository Supabase centralisé
+    supabase/              clients SSR/browser et session
     demo-data.ts           données explicitement démo
     providers.ts           interfaces d’extension V2
     scoring.ts             scoring déterministe configurable

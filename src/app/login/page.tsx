@@ -1,7 +1,21 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
 
-export default function LoginPage() {
-  const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+const errors: Record<string, string> = {
+  "not-configured": "Supabase n’est pas configuré.",
+  "invalid-input": "Vérifiez l’adresse email et le mot de passe.",
+  "invalid-credentials": "Email ou mot de passe incorrect.",
+};
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const supabaseReady = hasSupabaseConfig();
+  if (supabaseReady) {
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase.auth.getClaims();
+    if (data?.claims) redirect("/dashboard");
+  }
+  const { error } = await searchParams;
   return <main className="auth-shell">
     <section className="auth-brand-panel">
       <div className="auth-logo"><span className="brand-mark">B</span><strong>Bien En Ligne</strong></div>
@@ -19,9 +33,8 @@ export default function LoginPage() {
           <div className="field"><label htmlFor="password">Mot de passe</label><input className="input" id="password" name="password" type="password" autoComplete="current-password" minLength={8} required /></div>
           <button className="button primary" type="submit" disabled={!supabaseReady}>Se connecter</button>
         </form>
-        <div className="divider">ou</div>
-        <div className="demo-callout">Mode démo local : explorez tout le workflow sans compte ni configuration.</div>
-        <Link className="button" href="/dashboard">Ouvrir la démo locale</Link>
+        {error ? <p className="form-error" role="alert">{errors[error] ?? "La connexion a échoué."}</p> : null}
+        {!supabaseReady ? <><div className="divider">ou</div><div className="demo-callout">Mode démo local : explorez le workflow sans compte.</div><Link className="button" href="/dashboard">Ouvrir la démo locale</Link></> : null}
       </div>
     </section>
   </main>;

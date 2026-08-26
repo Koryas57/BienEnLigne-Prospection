@@ -6,7 +6,7 @@ import { useAppStore } from "@/components/app-store";
 import { Badge, Card, PageHeader, Stat } from "@/components/ui";
 
 export default function DashboardPage() {
-  const { state } = useAppStore();
+  const { state, mode } = useAppStore();
   const active = state.campaigns.find((campaign) => campaign.status === "ACTIVE") ?? state.campaigns[0];
   const prospects = state.prospects.filter((prospect) => prospect.campaignId === active?.id && prospect.status !== "DO_NOT_CONTACT");
   const pending = state.messages.filter((message) => message.status === "DRAFT");
@@ -18,7 +18,7 @@ export default function DashboardPage() {
   const channels = state.messages.reduce<Record<string, number>>((counts, message) => ({ ...counts, [message.channel]: (counts[message.channel] ?? 0) + 1 }), {});
 
   return <>
-    <PageHeader eyebrow="Mercredi 26 août" title="Bonjour, Yassine." description="Voici ce qui mérite votre attention aujourd’hui." />
+    <PageHeader eyebrow={mode === "supabase" ? "Supabase connecté" : "Mode démo local"} title={`Bonjour, ${state.profile.displayName}.`} description="Voici ce qui mérite votre attention aujourd’hui." />
     <section className="grid grid-2">
       <div className="hero-cockpit">
         <p className="eyebrow">Prospection US</p>

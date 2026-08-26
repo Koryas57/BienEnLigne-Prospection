@@ -7,4 +7,6 @@ out/
 *.log
 .vercel/
 coverage/
+supabase/.temp/
+*.tsbuildinfo
 !.env.example

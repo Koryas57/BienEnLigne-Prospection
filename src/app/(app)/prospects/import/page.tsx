@@ -26,14 +26,14 @@ export default function ImportPage() {
     const file = event.target.files?.[0]; if (!file) return;
     const reader = new FileReader(); reader.onload = () => { const data = parseCsv(String(reader.result)); setHeaders(data.headers); setRows(data.rows); const inferred: Record<number, Target> = {}; data.headers.forEach((header, index) => { inferred[index] = targets.includes(header as Target) ? header as Target : header.toLowerCase().includes("name") ? "businessName" : header.toLowerCase().includes("city") ? "city" : "ignore"; }); setMapping(inferred); }; reader.readAsText(file);
   }
-  function runImport() {
+  async function runImport() {
     const campaign = state.campaigns[0]; if (!campaign) return;
     let count = 0;
-    rows.forEach((row) => {
+    for (const row of rows) {
       const value = (target: Target) => row[Number(Object.entries(mapping).find(([, mapped]) => mapped === target)?.[0])] || "";
-      if (!value("businessName")) return;
-      addProspect({ campaignId: campaign.id, businessName: value("businessName"), city: value("city") || campaign.city, state: campaign.state, country: campaign.country, timezone: campaign.timezone, category: value("category") || campaign.sector, email: value("email") || undefined, phone: value("phone") || undefined, websiteUrl: value("websiteUrl") || undefined, instagramUrl: value("instagramUrl") || undefined, facebookUrl: value("facebookUrl") || undefined, googleMapsUrl: value("googleMapsUrl") || undefined, source: "Import CSV", status: "NEW", leadScore: 0, qualificationReason: "À analyser", hasWebsite: value("websiteUrl") ? true : "unknown", websiteMobileFriendly: "unknown", websiteHttps: "unknown", instagramActive: value("instagramUrl") ? "unknown" : false, facebookActive: value("facebookUrl") ? "unknown" : false, googlePresence: value("googleMapsUrl") ? true : "unknown", independentBusiness: "unknown", likelyFranchise: "unknown" }); count++;
-    });
+      if (!value("businessName")) continue;
+      const id = await addProspect({ campaignId: campaign.id, businessName: value("businessName"), city: value("city") || campaign.city, state: campaign.state, country: campaign.country, timezone: campaign.timezone, category: value("category") || campaign.sector, email: value("email") || undefined, phone: value("phone") || undefined, websiteUrl: value("websiteUrl") || undefined, instagramUrl: value("instagramUrl") || undefined, facebookUrl: value("facebookUrl") || undefined, googleMapsUrl: value("googleMapsUrl") || undefined, source: "Import CSV", status: "NEW", leadScore: 0, qualificationReason: "À analyser", hasWebsite: value("websiteUrl") ? true : "unknown", websiteMobileFriendly: "unknown", websiteHttps: "unknown", instagramActive: value("instagramUrl") ? "unknown" : false, facebookActive: value("facebookUrl") ? "unknown" : false, googlePresence: value("googleMapsUrl") ? true : "unknown", independentBusiness: "unknown", likelyFranchise: "unknown" }); if (id) count++;
+    }
     setImported(count);
   }
   return <>

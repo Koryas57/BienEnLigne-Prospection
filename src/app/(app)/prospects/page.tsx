@@ -6,6 +6,7 @@ import { FileUp, Plus, Search, UserRoundPlus } from "lucide-react";
 import { useAppStore } from "@/components/app-store";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import type { Channel, ProspectStatus } from "@/lib/types";
+import { prospectStatusLabel } from "@/lib/status-labels";
 
 const filters: Array<"ALL" | ProspectStatus> = ["ALL", "NEW", "QUALIFIED", "APPROVED", "CONTACTED", "INTERESTED", "WON", "DO_NOT_CONTACT"];
 const label: Record<string, string> = { ALL: "Tous", NEW: "Nouveaux", QUALIFIED: "Qualifiés", APPROVED: "Approuvés", CONTACTED: "Contactés", INTERESTED: "Intéressés", WON: "Gagnés", DO_NOT_CONTACT: "Bloqués" };
@@ -22,13 +23,13 @@ export default function ProspectsPage() {
     return matches && (filter === "ALL" || prospect.status === filter);
   }), [filter, query, state.prospects]);
 
-  function submit(formData: FormData) {
+  async function submit(formData: FormData) {
     const campaignId = String(formData.get("campaignId"));
     const campaign = state.campaigns.find((item) => item.id === campaignId) ?? state.campaigns[0];
     const businessName = String(formData.get("businessName") ?? "").trim();
     const city = String(formData.get("city") ?? "").trim();
     if (!campaign || !businessName || !city) return;
-    addProspect({
+    const id = await addProspect({
       campaignId: campaign.id, businessName, city, state: campaign.state, country: campaign.country, timezone: campaign.timezone,
       category: String(formData.get("category") || campaign.sector), phone: String(formData.get("phone") || "") || undefined,
       email: String(formData.get("email") || "") || undefined, websiteUrl: String(formData.get("websiteUrl") || "") || undefined,
@@ -38,7 +39,7 @@ export default function ProspectsPage() {
       websiteHttps: "unknown", instagramActive: formData.get("instagramUrl") ? "unknown" : false, facebookActive: formData.get("facebookUrl") ? "unknown" : false,
       googlePresence: formData.get("googleMapsUrl") ? true : "unknown", independentBusiness: "unknown", likelyFranchise: "unknown",
     });
-    setCreated(true); setShowForm(false);
+    if (id) { setCreated(true); setShowForm(false); }
   }
 
   return <>
@@ -66,9 +67,9 @@ export default function ProspectsPage() {
     <div className="list section">
       {visible.map((prospect) => <Link href={`/prospects/${prospect.id}`} className="list-card" key={prospect.id}>
         <div className="list-card-top"><div><h3>{prospect.businessName}</h3><p>{prospect.category} · {prospect.city}, {prospect.state}</p></div><span className="score">{prospect.leadScore}</span></div>
-        <div className="list-card-meta"><Badge tone={prospect.status === "DO_NOT_CONTACT" ? "red" : prospect.status === "INTERESTED" || prospect.status === "WON" ? "green" : "neutral"}>{prospect.status}</Badge>{(["instagram", "facebook", "email"] as Channel[]).filter((channel) => channel === "instagram" ? prospect.instagramUrl : channel === "facebook" ? prospect.facebookUrl : prospect.email).map((channel) => <Badge key={channel}>{channel}</Badge>)}</div>
+        <div className="list-card-meta"><Badge tone={prospect.status === "DO_NOT_CONTACT" ? "red" : prospect.status === "INTERESTED" || prospect.status === "WON" ? "green" : "neutral"}>{prospectStatusLabel(prospect.status)}</Badge>{(["instagram", "facebook", "email"] as Channel[]).filter((channel) => channel === "instagram" ? prospect.instagramUrl : channel === "facebook" ? prospect.facebookUrl : prospect.email).map((channel) => <Badge key={channel}>{channel}</Badge>)}</div>
       </Link>)}
-      {!visible.length ? <Card><EmptyState icon={<UserRoundPlus size={27} />} title="Aucun prospect ici" description="Ajoutez une entreprise manuellement ou importez un fichier CSV." /></Card> : null}
+      {!visible.length ? <Card><EmptyState icon={<UserRoundPlus size={27} />} title="Aucun prospect pour le moment" description="Ajoutez une entreprise manuellement ou importez un fichier CSV." action={<button className="button primary" onClick={() => setShowForm(true)}>Ajouter un prospect</button>} /></Card> : null}
     </div>
     {created ? <div className="toast" role="status">Prospect créé. Vous pouvez maintenant lancer son analyse.</div> : null}
   </>;

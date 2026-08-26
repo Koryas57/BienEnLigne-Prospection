@@ -76,7 +76,7 @@ export const demoMessages: OutreachMessage[] = [
   {
     id: "message-el-alamo", prospectId: "prospect-el-alamo", campaignId: demoCampaign.id, channel: "instagram",
     kind: "FIRST_CONTACT", status: "DRAFT", scheduledFor: day(0), recommendedLocalTime: "9:00 AM – 11:00 AM CDT",
-    body: "Hi El Alamo team — I have a friend who lives in Little Rock, and while we were talking about local businesses and website prices, I came across your restaurant. You’ve built a great local presence with strong reviews and active social pages, but I couldn’t find a dedicated website that brings your menu, hours, and location together. I’m currently offering an introductory $350 price to a few small US businesses, and I’d be happy to show you a simple idea tailored to El Alamo. Would that be useful?",
+    body: "Hi El Alamo team - I have a friend who lives in Little Rock, and while we were talking about local businesses and website prices, I came across your restaurant. You’ve built a great local presence with strong reviews and active social pages, but I couldn’t find a dedicated website that brings your menu, hours, and location together. I’m currently offering an introductory $350 price to a few small US businesses, and I’d be happy to show you a simple idea tailored to El Alamo. Would that be useful?",
     createdAt: iso, updatedAt: iso,
   },
   {
@@ -89,12 +89,24 @@ export const demoMessages: OutreachMessage[] = [
   {
     id: "message-followup", prospectId: "prospect-arkansas-hvac", campaignId: demoCampaign.id, channel: "facebook",
     kind: "FOLLOW_UP_1", status: "DRAFT", scheduledFor: day(0), recommendedLocalTime: "9:00 AM – 11:00 AM CDT",
-    body: "Hi again — just following up on the website idea I sent for Arkansas Comfort Co. I’d be glad to sketch a simple direction focused on making quote requests easier on mobile. No rush at all; should I send it over?",
+    body: "Hi again - just following up on the website idea I sent for Arkansas Comfort Co. I’d be glad to sketch a simple direction focused on making quote requests easier on mobile. No rush at all; should I send it over?",
     createdAt: iso, updatedAt: iso,
   },
 ];
 
 export const initialState: AppState = {
+  profile: { id: "local-demo-user", displayName: "Démo", companyName: "Bien En Ligne" },
+  settings: {
+    followUp1Days: 3,
+    followUp2Days: 8,
+    defaultCurrency: "USD",
+    defaultPrice: 350,
+    scoringRules: {
+      no_website: 30, weak_website: 20, reviews_100: 15, reviews_30: 10,
+      active_social: 10, independent: 10, local_business: 10, visual_content: 5,
+      modern_site: -30, major_franchise: -30, inactive: -20, irrelevant: -50,
+    },
+  },
   campaigns: [demoCampaign],
   prospects: demoProspects,
   messages: demoMessages,

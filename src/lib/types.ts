@@ -6,6 +6,21 @@ export type ProspectStatus = (typeof prospectStatuses)[number];
 export type Channel = "instagram" | "facebook" | "email";
 export type MessageStatus = "DRAFT" | "APPROVED" | "REJECTED" | "SNOOZED" | "SENT";
 export type ReplyCategory = "positive" | "interested" | "question" | "maybe_later" | "negative" | "do_not_contact" | "unknown";
+export type DataMode = "supabase" | "demo";
+
+export interface Profile {
+  id: string;
+  displayName: string;
+  companyName: string;
+}
+
+export interface UserSettings {
+  followUp1Days: number;
+  followUp2Days: number;
+  defaultCurrency: string;
+  defaultPrice: number;
+  scoringRules: Record<string, number>;
+}
 
 export interface Campaign {
   id: string;
@@ -120,6 +135,8 @@ export interface Deal {
 }
 
 export interface AppState {
+  profile: Profile;
+  settings: UserSettings;
   campaigns: Campaign[];
   prospects: Prospect[];
   messages: OutreachMessage[];
