@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:jwt-retry": "node --experimental-strip-types --test tests/jwt-clock-skew.test.mjs",
+    "test:e2e:fresh-login": "node --env-file=.env.local scripts/e2e-fresh-login.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "latest",

@@ -45,7 +45,7 @@ export default function DashboardPage() {
     </section>
 
     <section className="section">
-      <div className="section-heading"><h2>Vue d’ensemble</h2><span className="small muted">Données locales</span></div>
+      <div className="section-heading"><h2>Vue d’ensemble</h2><span className="small muted">{mode === "supabase" ? "Données synchronisées" : "Données locales"}</span></div>
       <div className="stats-grid">
         <Stat label="Nouveaux prospects" value={prospects.filter((p) => p.status === "NEW").length} helper="à qualifier" />
         <Stat label="Messages en attente" value={pending.length} helper="validation requise" tone="amber" />

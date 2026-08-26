@@ -3,6 +3,7 @@ import type {
   AppState, Campaign, Channel, Deal, OutreachMessage, Profile, Prospect,
   ProspectAnalysis, ReplyCategory, UserSettings,
 } from "@/lib/types";
+import { isJwtIssuedAtFutureError, JWT_ISSUED_AT_FUTURE, withJwtClockSkewRetry } from "@/lib/supabase/jwt-clock-skew";
 
 type DbRow = Record<string, unknown>;
 
@@ -68,6 +69,10 @@ function mapDeal(row: DbRow): Deal {
 }
 
 export async function loadWorkspace(supabase: SupabaseClient, userId: string): Promise<AppState> {
+  const contexts = [
+    "Chargement du profil", "Chargement des réglages", "Chargement des campagnes", "Chargement des prospects",
+    "Chargement des analyses", "Chargement des messages", "Chargement de l’historique", "Chargement des réponses", "Chargement des ventes",
+  ] as const;
   const readWorkspace = () => Promise.all([
     supabase.from("profiles").select("id, display_name, company_name").eq("id", userId).single(),
     supabase.from("settings").select("follow_up_1_days, follow_up_2_days, default_currency, default_price, scoring_rules").single(),
@@ -79,10 +84,24 @@ export async function loadWorkspace(supabase: SupabaseClient, userId: string): P
     supabase.from("replies").select("*").order("created_at", { ascending: false }),
     supabase.from("deals").select("*").order("won_at", { ascending: false }),
   ] as const);
-  let results = await readWorkspace();
-  if (results.some((result) => result.error?.message.includes("JWT issued at future"))) {
-    await new Promise((resolve) => setTimeout(resolve, 2_500));
-    results = await readWorkspace();
+  let lastClockSkewContext = "Chargement de l’espace";
+  let results;
+  try {
+    results = await withJwtClockSkewRetry(async () => {
+      const attemptResults = await readWorkspace();
+      const failures = attemptResults.flatMap((result, index) => result.error ? [{ error: result.error, context: contexts[index] }] : []);
+      const nonClockSkewFailure = failures.find(({ error }) => !isJwtIssuedAtFutureError(error));
+      if (nonClockSkewFailure) throw new Error(`${nonClockSkewFailure.context}: ${nonClockSkewFailure.error.message}`);
+      const clockSkewFailure = failures[0];
+      if (clockSkewFailure) {
+        lastClockSkewContext = clockSkewFailure.context;
+        throw clockSkewFailure.error;
+      }
+      return attemptResults;
+    });
+  } catch (error) {
+    if (isJwtIssuedAtFutureError(error)) throw new Error(`${lastClockSkewContext}: ${JWT_ISSUED_AT_FUTURE}`);
+    throw error;
   }
   const [profileResult, settingsResult, campaignsResult, prospectsResult, analysesResult, messagesResult, activitiesResult, repliesResult, dealsResult] = results;
   fail(profileResult.error, "Chargement du profil"); fail(settingsResult.error, "Chargement des réglages");
