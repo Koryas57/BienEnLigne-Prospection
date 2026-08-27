@@ -31,7 +31,10 @@ test("development conserve explicitement le mode démo local", () => {
 
 test("la page de connexion masque la démo et désactive le formulaire en erreur de configuration", () => {
   assert.match(login, /<LoginForm disabled=\{!supabaseReady\} \/>/);
-  assert.equal((loginForm.match(/disabled=\{disabled \|\| submitting\}/g) ?? []).length, 3);
+  assert.equal((loginForm.match(/disabled=\{controls\.fieldsDisabled\}/g) ?? []).length, 2);
+  assert.equal((loginForm.match(/readOnly=\{controls\.fieldsReadOnly\}/g) ?? []).length, 2);
+  assert.equal((loginForm.match(/disabled=\{controls\.submitDisabled\}/g) ?? []).length, 1);
+  assert.doesNotMatch(loginForm, /disabled=\{disabled \|\| submitting\}/);
   assert.match(login, /runtimeMode === "configuration_error"/);
   assert.match(login, /Configuration serveur incomplète/);
   assert.match(login, /runtimeMode === "demo" \? <>/);

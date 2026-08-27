@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:jwt-retry": "node --experimental-strip-types --test tests/jwt-clock-skew.test.mjs",
+    "test:auth": "node --experimental-strip-types --test tests/auth-login.test.mjs",
     "test:mobile-nav": "node --test tests/mobile-navigation.test.mjs",
     "test:runtime-mode": "node --experimental-strip-types --test tests/runtime-mode.test.mjs",
     "test:openai": "node --experimental-strip-types --test tests/openai-integration.test.mjs",
