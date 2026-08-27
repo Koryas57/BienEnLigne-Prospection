@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   applicationName: "Bien En Ligne Prospection",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#0d5c45" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#edf5f6" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="fr"><body>{children}</body></html>;

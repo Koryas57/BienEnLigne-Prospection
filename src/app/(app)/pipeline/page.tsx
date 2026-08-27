@@ -19,7 +19,7 @@ export default function PipelinePage() {
   const potential = state.prospects.filter((p) => !["WON", "LOST", "DO_NOT_CONTACT"].includes(p.status)).reduce((sum, prospect) => sum + (state.campaigns.find((c) => c.id === prospect.campaignId)?.price ?? 0), 0);
   const won = state.deals.reduce((sum, deal) => sum + deal.amount, 0);
   return <>
-    <PageHeader eyebrow="Vue commerciale" title="Pipeline" description="Faites glisser mentalement les opportunités d’une étape à la suivante — les changements se font depuis chaque fiche." />
+    <PageHeader eyebrow="Progression commerciale" title="Progression" description="Suivez chaque cible de sa détection jusqu’au résultat — les décisions restent centralisées dans sa fiche." />
     <div className="stats-grid"><Stat label="Opportunités actives" value={state.prospects.filter((p) => !["WON","LOST","DO_NOT_CONTACT"].includes(p.status)).length} /><Stat label="CA potentiel" value={`$${potential}`} tone="amber" /><Stat label="Ventes" value={state.deals.length} /><Stat label="CA gagné" value={`$${won}`} tone="green" /></div>
     <div className="pipeline-grid section">{columns.map((column) => {
       const prospects = state.prospects.filter((prospect) => column.statuses.includes(prospect.status));

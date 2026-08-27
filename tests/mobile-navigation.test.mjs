@@ -23,54 +23,36 @@ function assertOrdered(source, values) {
   }
 }
 
-test("la barre mobile expose exactement les cinq entrées principales", () => {
-  const primary = section(shell, "const mobileNav = [", "const mobileMoreNav");
-  assertOrdered(primary, ["/dashboard", "Aujourd’hui", "/approval", "Validation", "/prospects", "Prospects", "/campaigns", "Campagnes"]);
-  assert.doesNotMatch(primary, /\/pipeline|\/stats|\/settings/);
-  assert.match(shell, /<span>Plus<\/span>/);
+test("la navigation de jeu expose exactement cinq destinations principales", () => {
+  const nav = section(shell, "const gameNav = [", "\n\nfunction GameNavLink");
+  assertOrdered(nav, ["/dashboard", "Accueil", "/prospects", "Deck", "/scan", "Scanner", "/campaigns", "Missions", "/collection", "Collection"]);
+  assert.equal((nav.match(/href:/g) ?? []).length, 5);
+  assert.doesNotMatch(nav, /approval|pipeline|stats|settings/);
   assert.match(css, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
 });
 
-test("Plus contient les routes secondaires et signale leur état actif", () => {
-  const secondary = section(shell, "const mobileMoreNav = [", "const desktopNav");
-  assertOrdered(secondary, ["/pipeline", "Pipeline", "/stats", "Stats", "/settings", "Réglages"]);
-  assert.match(shell, /mobileMoreNav\.some/);
+test("Scanner est le bouton central visuellement surélevé", () => {
+  assert.match(shell, /href: "\/scan"[\s\S]*featured: true/);
+  assert.match(css, /\.mobile-nav-link\.featured \.nav-icon \{[^}]*margin-top:\s*-31px/);
+  assert.match(css, /\.mobile-nav-link\.featured \.nav-icon \{[^}]*border-radius:\s*50%/);
+});
+
+test("la navigation conserve états actifs, labels et grandes cibles tactiles", () => {
   assert.match(shell, /aria-current=\{active \? "page" : undefined\}/);
-  assert.match(shell, /aria-current=\{moreActive \? "page" : undefined\}/);
+  assert.match(shell, /aria-label=\{featured \? "Scanner de nouvelles entreprises" : undefined\}/);
+  assert.match(css, /\.mobile-nav-link \{[^}]*min-height:\s*54px/);
+  assert.match(css, /safe-area-inset-bottom/);
+  assert.match(css, /safe-area-inset-left/);
+  assert.match(css, /safe-area-inset-right/);
 });
 
-test("le bottom sheet possède les fermetures et attributs d’accessibilité requis", () => {
-  assert.match(shell, /aria-haspopup="dialog"/);
-  assert.match(shell, /role="dialog" aria-modal="true" aria-labelledby="mobile-more-title"/);
-  assert.match(shell, /mobile-more-overlay[\s\S]*aria-label="Fermer le menu Plus"[\s\S]*onClick=\{\(\) => closeSheet\(\)\}/);
-  assert.match(shell, /event\.key === "Escape"/);
-  assert.match(shell, /querySelectorAll<HTMLElement>/);
-  assert.match(shell, /document\.body\.style\.overflow = "hidden"/);
-});
-
-test("le statut, l’entreprise et le logout existant sont présents", () => {
-  assert.match(shell, /Supabase connecté/);
-  assert.match(shell, /Mode démo local/);
-  assert.match(shell, /companyName \? <small>\{companyName\}<\/small> : null/);
+test("les paramètres restent accessibles et proposent le logout existant", () => {
+  assert.match(shell, /href="\/settings" aria-label="Ouvrir les paramètres"/);
   assert.match(shell, /<form action="\/auth\/logout" method="post">/);
   assert.match(shell, /Déconnexion/);
 });
 
-test("la sidebar desktop affiche toujours le workflow de déconnexion existant", () => {
-  const sidebar = section(shell, '<aside className="sidebar">', "</aside>");
-  assert.match(sidebar, /<form action="\/auth\/logout" method="post">/);
-  assert.match(sidebar, /className="button ghost logout-button"/);
-  assert.match(sidebar, /<LogOut size=\{16\} \/>Déconnexion/);
-  assert.doesNotMatch(sidebar, /mode === "supabase" \? <form/);
-});
-
-test("les contraintes tactiles, safe areas et séparation desktop restent explicites", () => {
-  assert.match(css, /\.mobile-nav-link \{[^}]*min-height:\s*52px/);
-  assert.match(css, /\.mobile-more-link \{[^}]*min-height:\s*52px/);
-  assert.match(css, /safe-area-inset-bottom/);
-  assert.match(css, /safe-area-inset-left/);
-  assert.match(css, /safe-area-inset-right/);
-  assert.match(css, /@media \(min-width: 1024px\)[\s\S]*\.mobile-nav, \.mobile-more-layer \{ display: none; \}/);
-  const desktop = section(shell, "const desktopNav = [", "function NavLink");
-  assertOrdered(desktop, ["/approval", "/dashboard", "/prospects", "/campaigns", "/pipeline", "/stats", "/settings"]);
+test("desktop reprend les mêmes cinq destinations sans la barre mobile", () => {
+  assert.match(shell, /<nav className="side-nav"[\s\S]*gameNav\.map/);
+  assert.match(css, /@media \(min-width: 1024px\)[\s\S]*\.mobile-nav \{ display: none; \}/);
 });

@@ -26,7 +26,7 @@ export default function StatsPage() {
   }, [dimension, prospects, state.campaigns, state.messages]);
   const max = Math.max(1, ...groups.map(([, value]) => value));
   return <>
-    <PageHeader eyebrow="Performance" title="Statistiques" description="Comparez la traction par zone, secteur, canal et niveau de prix." />
+    <PageHeader eyebrow="Rapport de mission" title="Performances" description="Comparez la traction réelle par zone, secteur, canal et niveau de prix." />
     <div className="stats-grid">
       <Stat label="Prospects" value={prospects.length} /><Stat label="Qualifiés" value={prospects.filter((p) => p.leadScore >= 55).length} /><Stat label="Contactés" value={contacted} /><Stat label="Réponses" value={replies} tone="green" />
       <Stat label="Taux de réponse" value={contacted ? `${Math.round(replies / contacted * 100)}%` : "0%"} /><Stat label="Conversion" value={contacted ? `${Math.round(state.deals.length / contacted * 100)}%` : "0%"} /><Stat label="Panier moyen" value={state.deals.length ? `$${Math.round(revenue / state.deals.length)}` : "$0"} /><Stat label="CA gagné" value={`$${revenue}`} tone="green" />
