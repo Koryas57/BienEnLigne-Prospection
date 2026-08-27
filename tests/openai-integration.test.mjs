@@ -7,6 +7,7 @@ import {
   isOpenAIConfigured,
   resolveAIRequest,
   resolveOpenAIModel,
+  shouldUseOpenAIWebSearch,
 } from "../src/lib/ai/contracts.ts";
 import { classifyOpenAIError, OpenAINotConfiguredError, openAIErrorPayload } from "../src/lib/ai/errors.ts";
 
@@ -46,6 +47,16 @@ test("le fallback démo reste disponible uniquement en mode local", async () => 
 test("les succès OpenAI ne sont jamais marqués démo", async () => {
   const result = await resolveAIRequest("supabase", async () => ({ source: "openai" }), () => ({ source: "demo" }));
   assert.deepEqual(result, { data: { source: "openai" }, demo: false });
+});
+
+test("la recherche web OpenAI reste désactivée sans ambiguïté matérielle", () => {
+  assert.equal(shouldUseOpenAIWebSearch(true, { likelyFranchise: "unknown" }, { version: 1, fetchedAt: "2026-08-27T00:00:00Z", providers: [], evidence: [], conflicts: [] }), false);
+  assert.equal(shouldUseOpenAIWebSearch(false, { likelyFranchise: "unknown" }, { version: 1, fetchedAt: "2026-08-27T00:00:00Z", providers: [], evidence: [{ field: "brand", value: "Brand", fetchedAt: "2026-08-27T00:00:00Z", source: { kind: "geoapify", provider: "geoapify", label: "Geo" } }], conflicts: [] }), false);
+});
+
+test("la recherche web OpenAI peut résoudre un signal de marque ambigu", () => {
+  const enrichment = { version: 1, fetchedAt: "2026-08-27T00:00:00Z", providers: [], evidence: [{ field: "brand", value: "Brand", fetchedAt: "2026-08-27T00:00:00Z", source: { kind: "geoapify", provider: "geoapify", label: "Geo" } }], conflicts: [] };
+  assert.equal(shouldUseOpenAIWebSearch(true, { likelyFranchise: "unknown" }, enrichment), true);
 });
 
 test("classifie les erreurs OpenAI sans reprendre leur message sensible", () => {

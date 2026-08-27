@@ -7,6 +7,54 @@ export type Channel = "instagram" | "facebook" | "email";
 export type MessageStatus = "DRAFT" | "APPROVED" | "REJECTED" | "SNOOZED" | "SENT";
 export type ReplyCategory = "positive" | "interested" | "question" | "maybe_later" | "negative" | "do_not_contact" | "unknown";
 export type DataMode = "supabase" | "demo";
+export type WebsiteType = "dedicated" | "link_in_bio" | "social_profile" | "marketplace" | "booking_platform" | "unknown";
+export type EnrichmentSourceKind = "manual" | "geoapify" | "openstreetmap" | "direct_inspection" | "web_search" | "llm_interpretation";
+export type EnrichmentFactKey =
+  | "businessName" | "address" | "city" | "state" | "postcode" | "country" | "latitude" | "longitude" | "types" | "placeId"
+  | "rating" | "reviewCount" | "phone" | "email" | "websiteUrl" | "instagramUrl" | "facebookUrl" | "googleMapsUrl" | "businessStatus" | "openingHours"
+  | "datasource" | "brand" | "brandWikidataId" | "brandDetected" | "operator" | "officialName" | "franchiseSignal" | "wiki"
+  | "websiteType" | "hasWebsite" | "websiteHttps" | "googlePresence"
+  | "instagramActive" | "facebookActive" | "independentBusiness" | "likelyFranchise";
+export type EnrichmentValue = string | number | boolean | string[];
+
+export interface EnrichmentEvidence {
+  field: EnrichmentFactKey;
+  value: EnrichmentValue;
+  source: { kind: EnrichmentSourceKind; provider: string; label: string; url?: string };
+  fetchedAt: string;
+  confidence?: number;
+}
+
+export interface EnrichmentProviderRun {
+  provider: string;
+  status: "success" | "not_configured" | "no_match" | "error" | "skipped";
+  fetchedAt: string;
+  cached?: boolean;
+  message?: string;
+}
+
+export interface EnrichmentConflict {
+  field: EnrichmentFactKey;
+  selected: EnrichmentEvidence;
+  alternatives: EnrichmentEvidence[];
+}
+
+export interface ProspectEnrichment {
+  version: 1;
+  fetchedAt: string;
+  providers: EnrichmentProviderRun[];
+  evidence: EnrichmentEvidence[];
+  conflicts: EnrichmentConflict[];
+  prequalification?: PrequalificationTier;
+}
+
+export type PrequalificationTier = "reject" | "low" | "potential" | "strong";
+
+export interface ScoreContribution {
+  code: string;
+  label: string;
+  points: number;
+}
 
 export interface Profile {
   id: string;
@@ -49,6 +97,7 @@ export interface ProspectAnalysis {
   reasonToContact: string;
   bestChannel: Channel | "unknown";
   salesAngle: string;
+  webSources?: Array<{ title: string; url: string }>;
   demo?: boolean;
 }
 
@@ -67,6 +116,7 @@ export interface Prospect {
   phone?: string;
   email?: string;
   websiteUrl?: string;
+  websiteType?: WebsiteType;
   instagramUrl?: string;
   facebookUrl?: string;
   googleMapsUrl?: string;
@@ -93,6 +143,8 @@ export interface Prospect {
   replyCategory?: ReplyCategory;
   replyText?: string;
   analysis?: ProspectAnalysis;
+  enrichment?: ProspectEnrichment;
+  scoreBreakdown?: ScoreContribution[];
   createdAt: string;
   updatedAt: string;
 }

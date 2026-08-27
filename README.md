@@ -20,8 +20,8 @@ Le fournisseur de données est choisi explicitement au démarrage :
 - si les variables Supabase sont présentes, Supabase Auth protège toutes les routes privées et toutes les données métier proviennent de PostgreSQL sous RLS ;
 - dans ce mode, aucune donnée de démonstration et aucun état `localStorage` ne sont lus ;
 - le **mode local** avec seeds clairement marqués démo n’est utilisé que lorsque Supabase n’est pas configuré ;
-- si `OPENAI_API_KEY` est présente, l’analyse et la génération appellent `/api/ai`, puis remplacent le fallback local par une sortie OpenAI validée ;
-- sans clé OpenAI, l’interface continue avec un résultat marqué `Demo AI result`.
+- si `OPENAI_API_KEY` est présente, l’analyse et la génération appellent `/api/ai` avec une sortie structurée validée ;
+- en mode Supabase, une erreur OpenAI interrompt l’opération sans fallback ni fausse persistance ; le fallback `Demo AI result` reste limité au vrai mode local.
 
 Les lectures et mutations Supabase sont centralisées dans `src/lib/data/supabase-repository.ts`. Elles utilisent la session de l’utilisateur et ne transmettent jamais d’`owner_id` depuis le navigateur.
 
@@ -48,15 +48,18 @@ npm run build
 ```dotenv
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5.6-terra
+OPENAI_WEB_SEARCH_ENABLED=false
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+GEOAPIFY_API_KEY=
 ```
 
-Variables facultatives déjà réservées dans `.env.example` : `GOOGLE_PLACES_API_KEY`, `OUTSCRAPER_API_KEY`, `SERPER_API_KEY`, `CLAY_API_KEY`.
+L’enrichissement public utilise `GEOAPIFY_API_KEY` lorsqu’elle est configurée côté serveur, puis OpenStreetMap/Overpass en repli modéré et sans clé. La clé Geoapify est facultative et ne doit jamais être préfixée par `NEXT_PUBLIC_`. Elle s’obtient en créant un projet gratuit dans [Geoapify MyProjects](https://myprojects.geoapify.com/), sans jamais copier une vraie clé dans ce dépôt.
 
-`SUPABASE_SERVICE_ROLE_KEY` n’est jamais utilisée dans le navigateur. Elle est réservée aux futures tâches serveur d’administration ou d’import contrôlé.
+La découverte serveur expose un aperçu authentifié (`POST /api/discovery`) sans créer automatiquement de prospects. Elle géocode la ville puis utilise sa limite administrative Geoapify (`filter=place:{place_id}`), et non un petit rayon arbitraire. Elle limite la recherche à 100 résultats et utilise actuellement la correspondance vérifiée `Restaurant` → `catering.restaurant`. Les secteurs sans correspondance explicite restent non pris en charge plutôt que d’être approximés.
+
+Les clés OpenAI et providers restent exclusivement serveur. Aucune clé `NEXT_PUBLIC_*` n’est prévue pour ces services et aucune service role n’est utilisée par le pipeline.
 
 ## Configurer Supabase
 
@@ -84,12 +87,14 @@ src/
   app/
     (app)/                 pages privées / mode local
     api/ai/                appels IA exclusivement serveur
+    api/enrichment/        providers publics exclusivement serveur
     auth/                  connexion et déconnexion Supabase
   components/
     app-store.tsx          orchestration explicite Supabase/démo
     app-shell.tsx          navigation desktop/mobile
   lib/
     ai/                    prompts, schémas Zod et client OpenAI
+    enrichment/            provenance, cache, conflits et providers
     data/                  repository Supabase centralisé
     supabase/              clients SSR/browser et session
     demo-data.ts           données explicitement démo
@@ -137,22 +142,23 @@ Les fonctions sont séparées en prompts, schémas et transport serveur :
 - `analyzeReply()` ;
 - scoring déterministe via `scoreProspect()`.
 
-`/api/ai` valide l’utilisateur si Supabase est actif, valide l’entrée avec Zod, garde la clé côté serveur, limite timeout/retries et revalide le JSON de sortie. Les prompts imposent `unknown` lorsqu’une donnée manque et interdisent l’invention de faits.
+`/api/enrichment` exécute indépendamment Google Places et l’inspection d’URL, conserve la provenance et les conflits, puis le client authentifié persiste ces faits sous RLS avant l’appel Terra. `/api/ai` valide l’utilisateur, garde la clé côté serveur, limite timeout/retries et impose une sortie JSON structurée. Le score reste entièrement déterministe. La recherche web OpenAI est facultative via `OPENAI_WEB_SEARCH_ENABLED=true`, limitée et ne remplace jamais un provider structuré.
 
-## Ajouter un provider de découverte
+## Ajouter un provider d’enrichissement
 
-Implémentez `ProspectDiscoveryProvider` dans [providers.ts](src/lib/providers.ts) :
+Implémentez `ProspectEnrichmentProvider` dans [contracts.ts](src/lib/enrichment/contracts.ts). Les providers Google Places et inspection web servent de référence ; un provider social spécialisé peut être ajouté sans déduire l’activité de la simple présence d’une URL.
 
 ```ts
-export class GooglePlacesProvider implements ProspectDiscoveryProvider {
-  name = "google-places";
-  async discover(input) {
-    // Appel serveur, normalisation, validation, puis retour de Partial<Prospect>[]
+export class SocialProvider implements ProspectEnrichmentProvider {
+  id = "social-provider";
+  cacheTtlMs = 6 * 60 * 60 * 1000;
+  async enrich(prospect, fetchedAt) {
+    // Appel serveur fiable, faits sourcés, ou unknown.
   }
 }
 ```
 
-La V1 ne dépend d’aucun provider et conserve toujours l’ajout manuel et l’import CSV.
+L’ajout manuel et l’import CSV restent disponibles quand un provider est absent ou en erreur.
 
 ## Ajouter plus tard l’envoi email
 
@@ -165,7 +171,7 @@ Gmail, Resend ou Instantly peuvent ainsi être branchés sans modifier le workfl
 - toutes les tables métier ont RLS et sont filtrées par `auth.uid()` ;
 - `owner_id` utilise `auth.uid()` et n’est jamais accepté comme autorité depuis le client ;
 - les entrées Auth/IA sont validées côté serveur ;
-- OpenAI et la service role restent exclusivement serveur ;
+- OpenAI et les clés providers restent exclusivement serveur ; aucune service role n’est utilisée ;
 - `activities` n’est pas modifiable ni supprimable par un utilisateur authentifié ;
 - `DO_NOT_CONTACT` interdit les relances et la génération automatique ;
 - aucun envoi automatique n’existe dans cette V1.

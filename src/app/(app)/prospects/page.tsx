@@ -28,16 +28,21 @@ export default function ProspectsPage() {
     const campaign = state.campaigns.find((item) => item.id === campaignId) ?? state.campaigns[0];
     const businessName = String(formData.get("businessName") ?? "").trim();
     const city = String(formData.get("city") ?? "").trim();
+    const ratingValue = String(formData.get("rating") ?? "").trim();
+    const reviewCountValue = String(formData.get("reviewCount") ?? "").trim();
     if (!campaign || !businessName || !city) return;
     const id = await addProspect({
       campaignId: campaign.id, businessName, city, state: campaign.state, country: campaign.country, timezone: campaign.timezone,
       category: String(formData.get("category") || campaign.sector), phone: String(formData.get("phone") || "") || undefined,
+      address: String(formData.get("address") || "") || undefined,
       email: String(formData.get("email") || "") || undefined, websiteUrl: String(formData.get("websiteUrl") || "") || undefined,
       instagramUrl: String(formData.get("instagramUrl") || "") || undefined, facebookUrl: String(formData.get("facebookUrl") || "") || undefined,
       googleMapsUrl: String(formData.get("googleMapsUrl") || "") || undefined, source: "Ajout manuel", status: "NEW", leadScore: 0,
-      qualificationReason: "À analyser", hasWebsite: formData.get("websiteUrl") ? true : "unknown", websiteMobileFriendly: "unknown",
-      websiteHttps: "unknown", instagramActive: formData.get("instagramUrl") ? "unknown" : false, facebookActive: formData.get("facebookUrl") ? "unknown" : false,
-      googlePresence: formData.get("googleMapsUrl") ? true : "unknown", independentBusiness: "unknown", likelyFranchise: "unknown",
+      rating: ratingValue ? Number(ratingValue) : undefined,
+      reviewCount: reviewCountValue ? Number(reviewCountValue) : undefined,
+      qualificationReason: "À analyser", hasWebsite: "unknown", websiteMobileFriendly: "unknown",
+      websiteHttps: "unknown", instagramActive: "unknown", facebookActive: "unknown",
+      googlePresence: "unknown", independentBusiness: "unknown", likelyFranchise: "unknown",
     });
     if (id) { setCreated(true); setShowForm(false); }
   }
@@ -50,10 +55,13 @@ export default function ProspectsPage() {
         <div className="form-grid">
           <div className="field"><label htmlFor="businessName">Entreprise *</label><input className="input" id="businessName" name="businessName" required /></div>
           <div className="field"><label htmlFor="city">Ville *</label><input className="input" id="city" name="city" required defaultValue={state.campaigns[0]?.city} /></div>
+          <div className="field span-2"><label htmlFor="address">Adresse</label><input className="input" id="address" name="address" autoComplete="street-address" /></div>
           <div className="field"><label htmlFor="category">Secteur</label><input className="input" id="category" name="category" defaultValue="Restaurant" /></div>
           <div className="field"><label htmlFor="campaignId">Campagne</label><select className="select" id="campaignId" name="campaignId">{state.campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}</select></div>
           <div className="field"><label htmlFor="email">Email</label><input className="input" id="email" name="email" type="email" inputMode="email" /></div>
           <div className="field"><label htmlFor="phone">Téléphone</label><input className="input" id="phone" name="phone" type="tel" inputMode="tel" /></div>
+          <div className="field"><label htmlFor="rating">Note Google</label><input className="input" id="rating" name="rating" type="number" min="0" max="5" step="0.1" inputMode="decimal" /></div>
+          <div className="field"><label htmlFor="reviewCount">Nombre d’avis Google</label><input className="input" id="reviewCount" name="reviewCount" type="number" min="0" step="1" inputMode="numeric" /></div>
           <div className="field"><label htmlFor="websiteUrl">Site</label><input className="input" id="websiteUrl" name="websiteUrl" type="url" inputMode="url" placeholder="https://" /></div>
           <div className="field"><label htmlFor="googleMapsUrl">Google Maps</label><input className="input" id="googleMapsUrl" name="googleMapsUrl" type="url" inputMode="url" placeholder="https://" /></div>
           <div className="field"><label htmlFor="instagramUrl">Instagram</label><input className="input" id="instagramUrl" name="instagramUrl" type="url" inputMode="url" placeholder="https://" /></div>

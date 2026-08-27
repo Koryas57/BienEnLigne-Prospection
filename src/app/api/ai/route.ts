@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { aiRequestSchema, analysisSchema, messageSchema, replyAnalysisSchema } from "@/lib/ai/schemas";
 import { analysisPrompt, messagePrompt, replyPrompt } from "@/lib/ai/prompts";
-import type { OpenAIErrorPayload } from "@/lib/ai/contracts";
+import { shouldUseOpenAIWebSearch, type OpenAIErrorPayload } from "@/lib/ai/contracts";
+import type { Prospect, ProspectEnrichment } from "@/lib/types";
 import { openAIErrorPayload } from "@/lib/ai/errors";
-import { generateValidated } from "@/lib/ai/openai";
+import { generateValidated, generateValidatedWithMetadata } from "@/lib/ai/openai";
 import { hasAuthenticatedApiSession } from "@/lib/supabase/api-auth";
 
 export async function POST(request: Request) {
@@ -18,7 +19,19 @@ export async function POST(request: Request) {
     { status: 400 },
   );
   try {
-    if (parsed.data.task === "analyzeProspect") return NextResponse.json({ data: await generateValidated(analysisPrompt(parsed.data.prospect), analysisSchema), demo: false });
+    if (parsed.data.task === "analyzeProspect") {
+      const useWebSearch = shouldUseOpenAIWebSearch(
+        process.env.OPENAI_WEB_SEARCH_ENABLED === "true",
+        parsed.data.prospect as Partial<Prospect>,
+        parsed.data.enrichment as ProspectEnrichment | undefined,
+      );
+      const generated = await generateValidatedWithMetadata(
+        analysisPrompt(parsed.data.prospect, parsed.data.enrichment, useWebSearch),
+        analysisSchema,
+        { schemaName: "prospect_analysis", webSearch: useWebSearch },
+      );
+      return NextResponse.json({ data: { ...generated.data, webSources: generated.webSources }, demo: false });
+    }
     if (parsed.data.task === "generateOutreachMessage") return NextResponse.json({ data: await generateValidated(messagePrompt(parsed.data.prospect, parsed.data.campaign, parsed.data.channel, parsed.data.kind), messageSchema), demo: false });
     return NextResponse.json({ data: await generateValidated(replyPrompt(parsed.data.prospect, parsed.data.reply), replyAnalysisSchema), demo: false });
   } catch (error) {

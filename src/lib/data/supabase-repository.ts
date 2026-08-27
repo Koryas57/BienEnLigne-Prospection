@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   AppState, Campaign, Channel, Deal, OutreachMessage, Profile, Prospect,
-  ProspectAnalysis, ReplyCategory, UserSettings,
+  ProspectAnalysis, ProspectEnrichment, ReplyCategory, ScoreContribution, UserSettings,
 } from "@/lib/types";
 import { isJwtIssuedAtFutureError, JWT_ISSUED_AT_FUTURE, withJwtClockSkewRetry } from "@/lib/supabase/jwt-clock-skew";
 
@@ -27,11 +27,14 @@ function mapCampaign(row: DbRow): Campaign {
 
 function mapAnalysis(row: DbRow): ProspectAnalysis {
   const triState = (value: unknown): boolean | "unknown" => value === "true" ? true : value === "false" ? false : "unknown";
+  const raw = row.raw_result && typeof row.raw_result === "object" ? row.raw_result as Record<string, unknown> : {};
   return {
     isRealBusiness: triState(row.is_real_business), independentBusiness: triState(row.independent_business),
     likelyFranchise: triState(row.likely_franchise), digitalPresence: row.digital_presence as ProspectAnalysis["digitalPresence"],
     mainProblem: text(row.main_problem), relevance: text(row.relevance), reasonToContact: text(row.reason_to_contact),
-    bestChannel: row.best_channel as ProspectAnalysis["bestChannel"], salesAngle: text(row.sales_angle), demo: Boolean(row.is_demo),
+    bestChannel: row.best_channel as ProspectAnalysis["bestChannel"], salesAngle: text(row.sales_angle),
+    webSources: Array.isArray(raw.webSources) ? raw.webSources as ProspectAnalysis["webSources"] : undefined,
+    demo: Boolean(row.is_demo),
   };
 }
 
@@ -40,7 +43,7 @@ function mapProspect(row: DbRow, analysis?: ProspectAnalysis, reply?: DbRow): Pr
     id: text(row.id), campaignId: text(row.campaign_id), businessName: text(row.business_name), contactName: optionalText(row.contact_name),
     category: text(row.category), subcategory: optionalText(row.subcategory), city: text(row.city), state: text(row.state),
     country: text(row.country), timezone: text(row.timezone), address: optionalText(row.address), phone: optionalText(row.phone),
-    email: optionalText(row.email), websiteUrl: optionalText(row.website_url), instagramUrl: optionalText(row.instagram_url),
+    email: optionalText(row.email), websiteUrl: optionalText(row.website_url), websiteType: optionalText(row.website_type) as Prospect["websiteType"], instagramUrl: optionalText(row.instagram_url),
     facebookUrl: optionalText(row.facebook_url), googleMapsUrl: optionalText(row.google_maps_url), rating: row.rating == null ? undefined : number(row.rating),
     reviewCount: row.review_count == null ? undefined : number(row.review_count), notes: optionalText(row.notes), source: text(row.source, "manual"),
     status: row.status as Prospect["status"], leadScore: number(row.lead_score), qualificationReason: text(row.qualification_reason, "À analyser"),
@@ -50,6 +53,8 @@ function mapProspect(row: DbRow, analysis?: ProspectAnalysis, reply?: DbRow): Pr
     socialNotes: optionalText(row.social_notes), independentBusiness: knownBoolean(row.independent_business), likelyFranchise: knownBoolean(row.likely_franchise),
     contactedAt: optionalText(row.contacted_at), nextFollowUpAt: optionalText(row.next_follow_up_at),
     replyCategory: reply?.category as ReplyCategory | undefined, replyText: optionalText(reply?.original_text), analysis,
+    enrichment: row.enrichment && typeof row.enrichment === "object" ? row.enrichment as ProspectEnrichment : undefined,
+    scoreBreakdown: Array.isArray(row.score_breakdown) ? row.score_breakdown as ScoreContribution[] : undefined,
     createdAt: text(row.created_at), updatedAt: text(row.updated_at),
   };
 }
@@ -158,9 +163,10 @@ function prospectPayload(prospect: Partial<Prospect>) {
   const fields: Array<[keyof Prospect, string]> = [
     ["campaignId","campaign_id"],["businessName","business_name"],["contactName","contact_name"],["category","category"],["subcategory","subcategory"],
     ["city","city"],["state","state"],["country","country"],["timezone","timezone"],["address","address"],["phone","phone"],["email","email"],
-    ["websiteUrl","website_url"],["instagramUrl","instagram_url"],["facebookUrl","facebook_url"],["googleMapsUrl","google_maps_url"],["rating","rating"],
+    ["websiteUrl","website_url"],["websiteType","website_type"],["instagramUrl","instagram_url"],["facebookUrl","facebook_url"],["googleMapsUrl","google_maps_url"],["rating","rating"],
     ["reviewCount","review_count"],["notes","notes"],["source","source"],["status","status"],["leadScore","lead_score"],["qualificationReason","qualification_reason"],
     ["websiteQualityScore","website_quality_score"],["websiteNotes","website_notes"],["socialNotes","social_notes"],["contactedAt","contacted_at"],["nextFollowUpAt","next_follow_up_at"],
+    ["enrichment","enrichment"],["scoreBreakdown","score_breakdown"],
   ];
   for (const [source, target] of fields) if (prospect[source] !== undefined) payload[target] = prospect[source];
   const booleans: Array<[keyof Prospect, string]> = [["hasWebsite","has_website"],["websiteMobileFriendly","website_mobile_friendly"],["websiteHttps","website_https"],["instagramActive","instagram_active"],["facebookActive","facebook_active"],["googlePresence","google_presence"],["independentBusiness","independent_business"],["likelyFranchise","likely_franchise"]];
@@ -184,12 +190,22 @@ export async function updateProspect(supabase: SupabaseClient, id: string, updat
   await insertActivity(supabase, { prospectId: id, type: important ? updates.status as string : "UPDATED", label: important ? `Statut modifié: ${updates.status}` : "Fiche prospect modifiée" });
 }
 
-export async function saveAnalysis(supabase: SupabaseClient, prospect: Prospect, analysis: ProspectAnalysis, score: number, reason: string) {
+export async function saveAnalysis(supabase: SupabaseClient, prospect: Prospect, analysis: ProspectAnalysis, score: number, reason: string, breakdown: ScoreContribution[]) {
   const { error: analysisError } = await supabase.from("prospect_analyses").insert({ prospect_id: prospect.id, is_real_business: String(analysis.isRealBusiness), independent_business: String(analysis.independentBusiness), likely_franchise: String(analysis.likelyFranchise), digital_presence: analysis.digitalPresence, main_problem: analysis.mainProblem, relevance: analysis.relevance, reason_to_contact: analysis.reasonToContact, best_channel: analysis.bestChannel, sales_angle: analysis.salesAngle, raw_result: analysis, model: analysis.demo ? null : "openai", is_demo: Boolean(analysis.demo) });
   fail(analysisError, "Enregistrement de l’analyse");
   const status = score >= 55 ? "QUALIFIED" : "ANALYZED";
-  const { error } = await supabase.from("prospects").update({ lead_score: score, qualification_reason: reason, status }).eq("id", prospect.id); fail(error, "Mise à jour du score");
+  const { error } = await supabase.from("prospects").update({ lead_score: score, score_breakdown: breakdown, qualification_reason: reason, status }).eq("id", prospect.id); fail(error, "Mise à jour du score");
   await insertActivity(supabase, { prospectId: prospect.id, campaignId: prospect.campaignId, type: "ANALYZED", label: `Analyse terminée, score ${score}/100`, metadata: { demo: Boolean(analysis.demo) } });
+}
+
+export async function savePrequalification(supabase: SupabaseClient, prospect: Prospect, score: number, reason: string, breakdown: ScoreContribution[], tier: "reject" | "low") {
+  const status = tier === "reject" ? "REJECTED" : "ANALYZED";
+  const { error } = await supabase.from("prospects").update({ lead_score: score, score_breakdown: breakdown, qualification_reason: reason, status }).eq("id", prospect.id);
+  fail(error, "Mise à jour de la préqualification");
+  await insertActivity(supabase, {
+    prospectId: prospect.id, campaignId: prospect.campaignId, type: "PREQUALIFIED",
+    label: `Préqualification ${tier}, score ${score}/100`, metadata: { tier, openaiCalled: false },
+  });
 }
 
 export async function createMessage(supabase: SupabaseClient, message: Omit<OutreachMessage, "id" | "createdAt" | "updatedAt">, isDemo: boolean) {

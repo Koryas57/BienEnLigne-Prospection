@@ -2,17 +2,18 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { initialState } from "@/lib/demo-data";
-import { requestAI } from "@/lib/ai/client";
+import { requestAI, requestProspectEnrichment } from "@/lib/ai/client";
 import { resolveAIRequest } from "@/lib/ai/contracts";
-import { scoreProspect } from "@/lib/scoring";
+import { prequalifyProspect, scoreProspect, shouldAnalyzeWithOpenAI } from "@/lib/scoring";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   createCampaign as createCampaignRow, createDeal, createMessage as createMessageRow, createProspect as createProspectRow,
-  loadWorkspace, markMessageSent, recordReply as createReply, saveAnalysis, setMessagesStatus,
+  loadWorkspace, markMessageSent, recordReply as createReply, saveAnalysis, savePrequalification, setMessagesStatus,
   updateCampaign as updateCampaignRow, updateMessage as updateMessageRow, updateProfile as updateProfileRow,
   updateProspect as updateProspectRow, updateSettings as updateSettingsRow, sanitizeCommercialMessage,
 } from "@/lib/data/supabase-repository";
 import type { AppState, Campaign, Channel, DataMode, Deal, OutreachMessage, Profile, Prospect, ProspectAnalysis, ReplyCategory, UserSettings } from "@/lib/types";
+import type { RunEnrichmentResult } from "@/lib/enrichment/contracts";
 
 const STORAGE_KEY = "bienenligne-prospection-v1";
 const uid = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -23,7 +24,7 @@ interface StoreValue {
   updateCampaign: (id: string, updates: Partial<Campaign>) => Promise<void>;
   addProspect: (prospect: Omit<Prospect, "id" | "createdAt" | "updatedAt">) => Promise<string | undefined>;
   updateProspect: (id: string, updates: Partial<Prospect>) => Promise<void>;
-  analyzeProspect: (id: string) => Promise<boolean | undefined>;
+  analyzeProspect: (id: string, options?: { forceOpenAI?: boolean }) => Promise<boolean | undefined>;
   generateMessage: (prospectId: string, channel: Channel, kind?: OutreachMessage["kind"]) => Promise<string | undefined>;
   updateMessage: (id: string, body: string, subject?: string) => Promise<void>;
   setMessageStatus: (ids: string[], status: "APPROVED" | "REJECTED" | "SNOOZED") => Promise<void>;
@@ -41,11 +42,12 @@ function localActivity(prospectId: string | undefined, type: string, label: stri
   return { id: uid("activity"), prospectId, type, label, createdAt: new Date().toISOString() };
 }
 
-function fallbackAnalysis(prospect: Prospect): { analysis: ProspectAnalysis; score: number; reason: string } {
+function fallbackAnalysis(prospect: Prospect): { analysis: ProspectAnalysis; score: number; reason: string; breakdown: ReturnType<typeof scoreProspect>["breakdown"] } {
   const computed = scoreProspect(prospect);
   const bestChannel = prospect.instagramUrl ? "instagram" : prospect.facebookUrl ? "facebook" : prospect.email ? "email" : "unknown";
   return {
     score: computed.score,
+    breakdown: computed.breakdown,
     reason: prospect.qualificationReason && prospect.qualificationReason !== "À analyser" ? prospect.qualificationReason : computed.reason,
     analysis: {
       isRealBusiness: prospect.googlePresence === true ? true : "unknown", independentBusiness: prospect.independentBusiness,
@@ -122,18 +124,41 @@ export function AppStoreProvider({ children, initialData, mode, userId }: { chil
     setState((current) => ({ ...current, prospects: current.prospects.map((prospect) => prospect.id === id ? { ...prospect, ...updates, updatedAt: new Date().toISOString() } : prospect), activities: [localActivity(id, "UPDATED", "Fiche prospect modifiée"), ...current.activities] }));
   }); }, [refresh, run, supabase]);
 
-  const analyzeProspect = useCallback((id: string) => run(async () => {
+  const analyzeProspect = useCallback((id: string, options: { forceOpenAI?: boolean } = {}) => run(async () => {
     const prospect = state.prospects.find((item) => item.id === id);
     if (!prospect || prospect.status === "DO_NOT_CONTACT") throw new Error("Ce prospect ne peut pas être analysé.");
-    const fallback = fallbackAnalysis(prospect);
+    const enrichmentResult = await requestProspectEnrichment<RunEnrichmentResult>(prospect, prospect.enrichment);
+    const enrichedProspect: Prospect = { ...prospect, ...enrichmentResult.prospectPatch, enrichment: enrichmentResult.enrichment };
+    if (supabase) { await updateProspectRow(supabase, id, enrichmentResult.prospectPatch); await refresh(); }
+    const prequalification = prequalifyProspect(enrichedProspect);
+    if (!shouldAnalyzeWithOpenAI(prequalification.tier, Boolean(options.forceOpenAI))) {
+      const stoppedTier = prequalification.tier === "reject" ? "reject" : "low";
+      if (supabase) {
+        await savePrequalification(supabase, enrichedProspect, prequalification.score, prequalification.reason, prequalification.breakdown, stoppedTier);
+        await refresh(); return true;
+      }
+      const now = new Date().toISOString();
+      setState((current) => ({
+        ...current,
+        prospects: current.prospects.map((item) => item.id === id ? {
+          ...item, ...enrichmentResult.prospectPatch, enrichment: enrichmentResult.enrichment,
+          leadScore: prequalification.score, scoreBreakdown: prequalification.breakdown,
+          qualificationReason: prequalification.reason,
+          status: stoppedTier === "reject" ? "REJECTED" : "ANALYZED", updatedAt: now,
+        } : item),
+        activities: [localActivity(id, "PREQUALIFIED", `Préqualification ${stoppedTier}, score ${prequalification.score}/100 · OpenAI non appelé`), ...current.activities],
+      }));
+      return true;
+    }
+    const fallback = fallbackAnalysis(enrichedProspect);
     const resolved = await resolveAIRequest(mode, async () => {
-      const analysis = await requestAI<ProspectAnalysis>({ task: "analyzeProspect", prospect });
+      const analysis = await requestAI<ProspectAnalysis>({ task: "analyzeProspect", prospect: enrichedProspect, enrichment: enrichmentResult.enrichment });
       return { ...fallback, analysis: { ...analysis, demo: false }, reason: analysis.reasonToContact };
     }, () => fallback);
     const result = resolved.data;
-    if (supabase) { await saveAnalysis(supabase, prospect, result.analysis, result.score, result.reason); await refresh(); return true; }
+    if (supabase) { await saveAnalysis(supabase, enrichedProspect, result.analysis, result.score, result.reason, result.breakdown); await refresh(); return true; }
     const demoSuffix = resolved.demo ? " (Demo AI result)" : "";
-    const now = new Date().toISOString(); setState((current) => ({ ...current, prospects: current.prospects.map((item) => item.id === id ? { ...item, leadScore: result.score, qualificationReason: result.reason, status: result.score >= 55 ? "QUALIFIED" : "ANALYZED", analysis: result.analysis, updatedAt: now } : item), activities: [localActivity(id, "ANALYZED", `Analyse terminée, score ${result.score}/100${demoSuffix}`), ...current.activities] }));
+    const now = new Date().toISOString(); setState((current) => ({ ...current, prospects: current.prospects.map((item) => item.id === id ? { ...item, ...enrichmentResult.prospectPatch, enrichment: enrichmentResult.enrichment, leadScore: result.score, scoreBreakdown: result.breakdown, qualificationReason: result.reason, status: result.score >= 55 ? "QUALIFIED" : "ANALYZED", analysis: result.analysis, updatedAt: now } : item), activities: [localActivity(id, "ANALYZED", `Analyse terminée, score ${result.score}/100${demoSuffix}`), ...current.activities] }));
     return true;
   }), [mode, refresh, run, state.prospects, supabase]);
 

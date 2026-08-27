@@ -1,7 +1,10 @@
 const guardrails = `Use only facts present in the supplied JSON. Never infer names, reviews, activity, ownership, locations or website quality without evidence. For every unknown fact, use the exact value "unknown". No invented urgency, promises or claims. Never use an em dash or en dash character in any commercial message; use a normal hyphen or punctuation instead.`;
 
-export function analysisPrompt(prospect: Record<string, unknown>) {
-  return `${guardrails}\nAnalyze this prospect for a small-business website offer. Return JSON only with: isRealBusiness (boolean|unknown), independentBusiness (boolean|unknown), likelyFranchise (boolean|unknown), digitalPresence (weak|average|strong|unknown), mainProblem, relevance, reasonToContact, bestChannel (instagram|facebook|email|unknown), salesAngle.\nPROSPECT:\n${JSON.stringify(prospect)}`;
+export function analysisPrompt(prospect: Record<string, unknown>, enrichment: unknown, webSearchAllowed = false) {
+  const webSearch = webSearchAllowed
+    ? "You may use web search only to clarify a genuinely missing public fact. Do not open Google Maps or social-profile URLs directly. Treat search findings as lower-priority evidence than supplied structured providers and do not invent facts from snippets."
+    : "No external search is available. Use only the supplied prospect and enrichment evidence.";
+  return `${guardrails}\nAnalyze this prospect for a small-business website offer. The LLM writes the commercial diagnosis only: never calculate, suggest or return a numeric lead score. ${webSearch} Distinguish a dedicated website from link-in-bio, social, marketplace and booking pages. URL presence never proves social activity. Explain the most defensible commercial gap without penalizing missing information. Return JSON only with: isRealBusiness (boolean|unknown), independentBusiness (boolean|unknown), likelyFranchise (boolean|unknown), digitalPresence (weak|average|strong|unknown), mainProblem, relevance, reasonToContact, bestChannel (instagram|facebook|email|unknown), salesAngle.\nPROSPECT:\n${JSON.stringify(prospect)}\nENRICHMENT_AND_PROVENANCE:\n${JSON.stringify(enrichment ?? {})}`;
 }
 
 export function messagePrompt(prospect: Record<string, unknown>, campaign: Record<string, unknown>, channel: string, kind: string) {
