@@ -180,17 +180,45 @@ test("le cache persistant évite un nouvel appel Geoapify pendant plusieurs jour
   assert.equal(second.enrichment.providers[0].cached, true);
 });
 
-test("l’inspection distingue site dédié, page de liens et profil social", async () => {
+test("l’inspection distingue site dédié et plateformes non dédiées sans contradiction", async () => {
   assert.equal(classifyWebsiteUrl("https://restaurant.example/menu"), "dedicated");
   assert.equal(classifyWebsiteUrl("https://linktr.ee/restaurant"), "link_in_bio");
   assert.equal(classifyWebsiteUrl("https://instagram.com/restaurant"), "social_profile");
+  assert.equal(classifyWebsiteUrl("https://yelp.com/biz/restaurant"), "marketplace");
+  assert.equal(classifyWebsiteUrl("https://opentable.com/restaurant"), "booking_platform");
   const provider = new WebsiteInspectionProvider({ fetchImpl: okFetch, resolveHostname: publicDns });
   const result = await provider.enrich({ ...baseProspect, websiteUrl: "https://linktr.ee/yafa" }, baseProspect.updatedAt);
+  assert.equal(result.evidence.find((item) => item.field === "websiteType")?.value, "link_in_bio");
   assert.equal(result.evidence.find((item) => item.field === "hasWebsite")?.value, false);
+  assert.equal(result.evidence.find((item) => item.field === "websiteHttps")?.value, true);
   const dedicated = await provider.enrich({ ...baseProspect, websiteUrl: "https://restaurant.example" }, baseProspect.updatedAt);
   assert.equal(dedicated.evidence.find((item) => item.field === "hasWebsite")?.value, true);
   const social = await provider.enrich({ ...baseProspect, websiteUrl: "https://instagram.com/yafa" }, baseProspect.updatedAt);
   assert.equal(social.evidence.find((item) => item.field === "websiteType")?.value, "social_profile");
+  assert.equal(social.evidence.find((item) => item.field === "hasWebsite")?.value, false);
+  const marketplace = await provider.enrich({ ...baseProspect, websiteUrl: "https://yelp.com/biz/yafa" }, baseProspect.updatedAt);
+  assert.equal(marketplace.evidence.find((item) => item.field === "websiteType")?.value, "marketplace");
+  assert.equal(marketplace.evidence.find((item) => item.field === "hasWebsite")?.value, false);
+  const booking = await provider.enrich({ ...baseProspect, websiteUrl: "https://opentable.com/r/yafa" }, baseProspect.updatedAt);
+  assert.equal(booking.evidence.find((item) => item.field === "websiteType")?.value, "booking_platform");
+  assert.equal(booking.evidence.find((item) => item.field === "hasWebsite")?.value, false);
+});
+
+test("legacy Yafa: l’inspection Linktree corrige hasWebsite=true sans conflit manuel artificiel", async () => {
+  const legacy = { ...baseProspect, websiteUrl: "https://linktr.ee/yafa", hasWebsite: true, websiteType: undefined };
+  const website = new WebsiteInspectionProvider({ fetchImpl: okFetch, resolveHostname: publicDns });
+  const enriched = await runProspectEnrichment({ prospect: legacy, providers: [website], now: new Date(baseProspect.updatedAt) });
+  const prospect = { ...legacy, ...enriched.prospectPatch };
+  const scoring = scoreProspect(prospect);
+
+  assert.equal(prospect.websiteType, "link_in_bio");
+  assert.equal(prospect.hasWebsite, false);
+  assert.equal(prospect.websiteHttps, true);
+  assert.equal(enriched.enrichment.evidence.some((item) => ["websiteType", "hasWebsite", "websiteHttps"].includes(item.field) && item.source.kind === "manual"), false);
+  assert.equal(enriched.enrichment.conflicts.some((item) => item.field === "hasWebsite"), false);
+  assert.deepEqual(scoring.breakdown.find((item) => item.code === "no_dedicated_website"), {
+    code: "no_dedicated_website", label: "Aucun site dédié", points: 30,
+  });
 });
 
 test("l’inspection suit les redirections et bloque les destinations privées", async () => {

@@ -17,6 +17,8 @@ const sourcePriority: Record<EnrichmentSourceKind, number> = {
   llm_interpretation: 100,
 };
 
+const derivedWebsiteFields = new Set<EnrichmentFactKey>(["websiteType", "hasWebsite", "websiteHttps"]);
+
 function sameValue(left: EnrichmentValue, right: EnrichmentValue) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -27,9 +29,7 @@ function manualEvidence(prospect: EnrichmentProspect, fetchedAt: string, existin
     ["phone", prospect.phone], ["email", prospect.email],
     ["websiteUrl", prospect.websiteUrl], ["instagramUrl", prospect.instagramUrl], ["facebookUrl", prospect.facebookUrl],
     ["googleMapsUrl", prospect.googleMapsUrl], ["rating", prospect.rating],
-    ["reviewCount", prospect.reviewCount], ["websiteType", prospect.websiteType],
-    ["hasWebsite", prospect.hasWebsite === "unknown" ? undefined : prospect.hasWebsite],
-    ["websiteHttps", prospect.websiteHttps === "unknown" ? undefined : prospect.websiteHttps],
+    ["reviewCount", prospect.reviewCount],
     ["instagramActive", prospect.instagramActive === "unknown" ? undefined : prospect.instagramActive],
     ["facebookActive", prospect.facebookActive === "unknown" ? undefined : prospect.facebookActive],
     ["googlePresence", prospect.googlePresence === "unknown" ? undefined : prospect.googlePresence],
@@ -48,8 +48,13 @@ function manualEvidence(prospect: EnrichmentProspect, fetchedAt: string, existin
   });
 }
 
-function compareEvidence(left: EnrichmentEvidence, right: EnrichmentEvidence) {
-  const priority = sourcePriority[right.source.kind] - sourcePriority[left.source.kind];
+function evidencePriority(field: EnrichmentFactKey, source: EnrichmentSourceKind) {
+  if (derivedWebsiteFields.has(field) && source === "direct_inspection") return 450;
+  return sourcePriority[source];
+}
+
+function compareEvidence(field: EnrichmentFactKey, left: EnrichmentEvidence, right: EnrichmentEvidence) {
+  const priority = evidencePriority(field, right.source.kind) - evidencePriority(field, left.source.kind);
   if (priority) return priority;
   const confidence = (right.confidence ?? 0) - (left.confidence ?? 0);
   if (confidence) return confidence;
@@ -62,7 +67,7 @@ function resolveEvidence(evidence: EnrichmentEvidence[]) {
   const selected = new Map<EnrichmentFactKey, EnrichmentEvidence>();
   const conflicts: ProspectEnrichment["conflicts"] = [];
   for (const [field, candidates] of grouped) {
-    const ordered = [...candidates].sort(compareEvidence);
+    const ordered = [...candidates].sort((left, right) => compareEvidence(field, left, right));
     const winner = ordered[0];
     selected.set(field, winner);
     const alternatives = ordered.slice(1).filter((item) => !sameValue(item.value, winner.value));
@@ -82,6 +87,9 @@ function selectedProspectPatch(selected: Map<EnrichmentFactKey, EnrichmentEviden
   for (const [field, item] of selected) {
     if (!prospectFields.has(field)) continue;
     (patch as Record<string, unknown>)[field] = item.value;
+  }
+  if (patch.websiteType && new Set(["link_in_bio", "social_profile", "marketplace", "booking_platform"]).has(patch.websiteType)) {
+    patch.hasWebsite = false;
   }
   return patch;
 }
