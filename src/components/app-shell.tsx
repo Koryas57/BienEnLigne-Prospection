@@ -149,7 +149,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
         <Link className="brand" href="/dashboard"><span className="brand-mark">B</span><span><strong>Bien En Ligne</strong><small>Prospection</small></span></Link>
         <nav className="side-nav" aria-label="Navigation principale">{desktopNav.map((item) => <NavLink key={item.href} {...item} />)}</nav>
         <div className="demo-note"><span className="status-dot" />{mode === "supabase" ? "Supabase connecté" : "Mode démo local"}<small>{mode === "supabase" ? state.profile.companyName : "Données sur cet appareil."}</small></div>
-        {mode === "supabase" ? <form action="/auth/logout" method="post"><button className="button ghost logout-button" type="submit"><LogOut size={16} />Déconnexion</button></form> : null}
+        <form action="/auth/logout" method="post"><button className="button ghost logout-button" type="submit"><LogOut size={16} />Déconnexion</button></form>
       </aside>
       <main className="main-content">{children}</main>
       <MobileNavigation mode={mode} companyName={state.profile.companyName || undefined} />

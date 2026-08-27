@@ -56,6 +56,14 @@ test("le statut, l’entreprise et le logout existant sont présents", () => {
   assert.match(shell, /Déconnexion/);
 });
 
+test("la sidebar desktop affiche toujours le workflow de déconnexion existant", () => {
+  const sidebar = section(shell, '<aside className="sidebar">', "</aside>");
+  assert.match(sidebar, /<form action="\/auth\/logout" method="post">/);
+  assert.match(sidebar, /className="button ghost logout-button"/);
+  assert.match(sidebar, /<LogOut size=\{16\} \/>Déconnexion/);
+  assert.doesNotMatch(sidebar, /mode === "supabase" \? <form/);
+});
+
 test("les contraintes tactiles, safe areas et séparation desktop restent explicites", () => {
   assert.match(css, /\.mobile-nav-link \{[^}]*min-height:\s*52px/);
   assert.match(css, /\.mobile-more-link \{[^}]*min-height:\s*52px/);
