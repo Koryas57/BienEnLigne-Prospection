@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { initialState } from "@/lib/demo-data";
 import { loadWorkspace } from "@/lib/data/supabase-repository";
+import { resolveRuntimeDataMode } from "@/lib/runtime-mode";
 import { createSupabaseServerClient, hasSupabaseConfig } from "@/lib/supabase/server";
 
 function WorkspaceLoading() {
@@ -16,7 +16,8 @@ function WorkspaceLoading() {
 }
 
 async function AuthenticatedWorkspace({ children }: { children: React.ReactNode }) {
-  if (hasSupabaseConfig()) {
+  const runtimeMode = resolveRuntimeDataMode(process.env.NODE_ENV, hasSupabaseConfig());
+  if (runtimeMode === "supabase") {
     const supabase = await createSupabaseServerClient();
     const { data } = await supabase.auth.getClaims();
     const userId = typeof data?.claims?.sub === "string" ? data.claims.sub : undefined;
@@ -24,6 +25,8 @@ async function AuthenticatedWorkspace({ children }: { children: React.ReactNode 
     const initialData = await loadWorkspace(supabase, userId);
     return <AppShell initialData={initialData} mode="supabase" userId={userId}>{children}</AppShell>;
   }
+  if (runtimeMode === "configuration_error") redirect("/login?error=configuration-error");
+  const { initialState } = await import("@/lib/demo-data");
   return <AppShell initialData={initialState} mode="demo">{children}</AppShell>;
 }
 

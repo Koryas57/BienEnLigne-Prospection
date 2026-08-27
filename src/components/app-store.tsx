@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { initialState } from "@/lib/demo-data";
 import { requestAI, requestProspectEnrichment } from "@/lib/ai/client";
 import { resolveAIRequest } from "@/lib/ai/contracts";
 import { prequalifyProspect, scoreProspect, shouldAnalyzeWithOpenAI } from "@/lib/scoring";
@@ -216,7 +215,7 @@ export function AppStoreProvider({ children, initialData, mode, userId }: { chil
     setState((current) => ({ ...current, settings: { ...current.settings, ...settings } }));
   }); }, [refresh, run, supabase]);
 
-  const resetDemo = useCallback(() => { if (mode !== "demo") return; setState(initialState); window.localStorage.removeItem(STORAGE_KEY); }, [mode]);
+  const resetDemo = useCallback(() => { if (mode !== "demo") return; setState(initialData); window.localStorage.removeItem(STORAGE_KEY); }, [initialData, mode]);
   const clearError = useCallback(() => setError(undefined), []);
   const value = useMemo(() => ({ state, mode, hydrated, busy, error, clearError, addCampaign, updateCampaign, addProspect, updateProspect, analyzeProspect, generateMessage, updateMessage, setMessageStatus, markSent, recordReply, markWon, updateProfile, updateSettings, resetDemo }), [state, mode, hydrated, busy, error, clearError, addCampaign, updateCampaign, addProspect, updateProspect, analyzeProspect, generateMessage, updateMessage, setMessageStatus, markSent, recordReply, markWon, updateProfile, updateSettings, resetDemo]);
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
